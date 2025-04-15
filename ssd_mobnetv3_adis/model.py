@@ -100,9 +100,14 @@ class SSD_MOBILENET_V3_Large(nn.Module):
         self.load_state_dict(torch.load(checkpoint_path, map_location=map_location)[key_name])
         print(f"Checkpoint loaded in {time.time() - start_time:.2f} seconds.")
         
-    def evaluate(self, dataloaders: dict[str, torch.utils.data.DataLoader], device: torch.device|str, batch_size: int = 64):
+    def evaluate(self, dataloaders: dict[str, torch.utils.data.DataLoader], device: torch.device|str) -> dict[str, dict[str, float]]:
         """
-        Evaluate the model on the given dataloaders."""
+        Evaluate the model on the given dataloaders.
+        
+        Args:
+            dataloaders (dict[str, torch.utils.data.DataLoader]): A dictionary containing the dataloaders for each split (train, val, test).
+            device (torch.device|str): The device to run the evaluation on.
+        """
         
         # initialize the metric
         metric = MeanAveragePrecision(
