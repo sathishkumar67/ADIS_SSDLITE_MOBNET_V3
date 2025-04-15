@@ -200,7 +200,7 @@ class SSD_MOBILENET_V3_Large_Lightning(L.LightningModule):
         
         # get the images and targets from the batch
         images, targets = batch
-        images = torch.as_tensor(images, dtype=torch.float32).permute(0, 3, 1, 2)
+        images = torch.as_tensor(images, dtype=torch.float32) #.permute(0, 3, 1, 2)
         images.div_(255.0)
 
         for target in targets:
@@ -220,7 +220,7 @@ class SSD_MOBILENET_V3_Large_Lightning(L.LightningModule):
         # set the model to evaluation mode
         self.model.eval()
         images, targets = batch
-        images = torch.as_tensor(images, dtype=torch.float32).permute(0, 3, 1, 2)
+        images = torch.as_tensor(images, dtype=torch.float32)   #.permute(0, 3, 1, 2)
         images.div_(255.0)
 
         for target in targets:
