@@ -1,8 +1,12 @@
 from __future__ import annotations
-from typing import Tuple
+from typing import Tuple, List, Dict, Any
 import os
 import cv2
 import numpy as np
+import pickle
+import shutil
+from tqdm import tqdm
+import lmdb
 import torch
 from torch.utils.data import Dataset
 
@@ -62,10 +66,25 @@ class SSDLITEOBJDET_DATASET(Dataset):
             if not os.path.exists(lbl_file):
                 raise FileNotFoundError(f"Label file missing for {img_file}")
 
+
     def __len__(self) -> int:
+        """
+        Returns the number of samples in the dataset.
+        """
         return len(self.image_files)
 
+
     def __getitem__(self, idx) -> Tuple[torch.Tensor, dict]:
+        """
+        Get a sample from the dataset.
+        
+        Args:
+            idx (int): Index of the sample to retrieve.
+        
+        Returns:
+            Tuple[torch.Tensor, dict]: A tuple containing the image and a dictionary of bounding boxes and labels.
+        """
+        # Get image and label file paths
         img_path, label_path = self.image_files[idx], self.label_files[idx]
 
         # Read image and convert to RGB format
@@ -77,6 +96,7 @@ class SSDLITEOBJDET_DATASET(Dataset):
         # Read label file and parse the bounding boxes and labels
         data = np.loadtxt(label_path, dtype=self.dtype, delimiter=' ', ndmin=2)
         
+        # Check if the label file is empty
         if data.size == 0:
             return image, {
                 'boxes': np.array([[0.0, 0.0, 1.0, 1.0]], dtype=self.dtype),
@@ -107,32 +127,70 @@ class SSDLITEOBJDET_DATASET(Dataset):
             # Validate class IDs
             if np.all((valid_labels < 0) & (valid_labels >= self.num_classes)):
                 raise ValueError(f"Invalid class ID in {label_path}")
-
+            
+            # Normalize boxes to [0, 1] for training mode
             if self.mode == "train":
-                np.divide(valid_boxes, self.img_size, out=valid_boxes) # Normalize boxes to [0, 1]
+                np.divide(valid_boxes, self.img_size, out=valid_boxes) 
 
+            # Return image and bounding boxes
             return image, {
                 'boxes': valid_boxes,
                 'labels': valid_labels}
         
+        
     def denormalize_bbox(self, boxes: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        # Denormalize boxes to original size
+        """
+        Denormalize bounding boxes to original size.
+        
+        Args:
+            boxes (torch.Tensor|np.ndarray): Normalized bounding boxes with shape (N, 4).
+            
+        Returns:
+            torch.Tensor|np.ndarray: Denormalized bounding boxes with shape (N, 4).
+        """
         return boxes * self.img_size
     
+    
     def normalize_bbox(self, boxes: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        # Normalize boxes to [0, 1]
+        """
+        Normalize bounding boxes to [0, 1].
+        
+        Args:
+            boxes (torch.Tensor|np.ndarray): Bounding boxes with shape (N, 4).
+            
+        Returns:
+            torch.Tensor|np.ndarray: Normalized bounding boxes with shape (N, 4).
+        """
         return boxes / self.img_size
     
+    
     def denormalize_image(self, image: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        # Denormalize image to [0, 255]
+        """
+        Denormalize image to original size.
+        
+        Args:
+            image (torch.Tensor|np.ndarray): Normalized image with shape (C, H, W) or (H, W, C).
+            
+        Returns:
+            torch.Tensor|np.ndarray: Denormalized image with shape (C, H, W) or (H, W, C).
+        """
         return image * 255.0
     
+    
     def normalize_image(self, image: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        # Normalize image to [0, 1]
+        """
+        Normalize image to [0, 1].
+        
+        Args:
+            image (torch.Tensor|np.ndarray): Image with shape (C, H, W) or (H, W, C).
+            
+        Returns:
+            torch.Tensor|np.ndarray: Normalized image with shape (C, H, W) or (H, W, C).
+        """
         return image / 255.0
     
 
-def collate_fn(batch):
+def collate_fn(batch) -> Tuple[torch.Tensor, List[Dict[str, torch.Tensor]]]:
     """
     Collate function to process a batch of samples from SSDLITEOBJDET_DATASET.
     
@@ -144,6 +202,7 @@ def collate_fn(batch):
         - images: Tensor of shape (B, C, H, W) with normalized images
         - targets: List of dicts with 'boxes' and 'labels' tensors for each image
     """
+    # list to hold images and targets
     images = []
     targets = []
 
@@ -163,4 +222,150 @@ def collate_fn(batch):
             'labels': labels
         })
     
+    # Stack images into a single tensor
+    # and return as a tuple with targets
     return torch.stack(images, dim=0), targets
+
+
+
+class CachedSSDLITEOBJDET_DATASET(Dataset):
+    def __init__(self, dataset_class :SSDLITEOBJDET_DATASET, 
+                root_dir: str, 
+                split: str, 
+                num_classes: int, 
+                img_size: int=320, 
+                dtype: np.dtype=np.float32, 
+                mode: str="train",
+                lmdb_path: str = None,
+                map_size: int=1099511627776) -> None:
+        """
+        Initialize the Cached SSDLITEOBJDET dataset.
+        
+        Args:
+            root_dir (str): The root directory of the dataset.
+            split (str): The split of the dataset, either 'train' or 'eval'.
+            num_classes (int): The number of classes in the dataset with background class.
+            img_size (int, optional): The size of the input images. Defaults to 320.
+            dtype (np.dtype, optional): The data type for the bounding box coordinates. Defaults to np.float32.
+            mode (str, optional): The mode of the dataset, either 'train' or 'eval'. Defaults to 'train'.
+            lmdb_path (str, optional): Path to the LMDB cache. Defaults to None.
+            map_size (int, optional): Size of the LMDB map. Defaults to 1TB.
+        """
+        super().__init__()
+        
+        # initialize attributes
+        self.root_dir, self.split, self.img_size, self.num_classes = root_dir, split.lower(), img_size, num_classes
+        self.dtype = dtype
+        self.mode = mode.lower()
+        self.dataset_class = dataset_class
+        self.map_size = map_size
+        self.lmdb_path = lmdb_path if lmdb_path else os.path.join(self.root_dir, f"{self.split}_cache")
+        
+        # preprocess the dataset and cache it in lmdb
+        self.preprocess_dataset()
+        
+        # open lmdb environment in read-only mode
+        self.env = lmdb.open(self.lmdb_path, readonly=True, lock=False)
+        with self.env.begin() as txn:
+            self.length = txn.stat()['entries']
+
+    
+    def __len__(self):
+        """
+        Returns the number of samples in the dataset.
+        """
+        return self.length
+
+    
+    def __getitem__(self, idx):
+        """
+        Get a sample from the cached dataset.
+        
+        Args:
+            idx (int): Index of the sample to retrieve.
+        """
+        with self.env.begin() as txn:
+            data = txn.get(str(idx).encode())
+        return pickle.loads(data)
+    
+    
+    def preprocess_dataset(self) -> None:
+        """
+        Preprocess the dataset and cache it in LMDB format.
+        """
+        # instantiate the dataset class
+        dataset = self.dataset_class(root_dir=self.root_dir,
+                                    split=self.split, 
+                                    num_classes=self.num_classes, 
+                                    img_size=self.img_size, 
+                                    dtype=self.dtype, 
+                                    mode=self.mode)
+        # Create LMDB environment
+        env = lmdb.open(self.lmdb_path, map_size=self.map_size)  # 1TB
+        
+        # write data to LMDB
+        with env.begin(write=True) as txn:
+            for idx in tqdm(range(len(dataset))):
+                image, target = dataset[idx]
+                
+                # Serialize and store
+                txn.put(
+                    str(idx).encode(),
+                    pickle.dumps((image, target), protocol=pickle.HIGHEST_PROTOCOL)
+                )
+
+        # delete the root directory
+        shutil.rmtree(os.path.join(self.root_dir, self.split))
+        del dataset
+    
+    
+    def denormalize_bbox(self, boxes: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
+        """
+        Denormalize bounding boxes to original size.
+        
+        Args:
+            boxes (torch.Tensor|np.ndarray): Normalized bounding boxes with shape (N, 4).
+            
+        Returns:
+            torch.Tensor|np.ndarray: Denormalized bounding boxes with shape (N, 4).
+        """
+        return boxes * self.img_size
+    
+    
+    def normalize_bbox(self, boxes: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
+        """
+        Normalize bounding boxes to [0, 1].
+        
+        Args:
+            boxes (torch.Tensor|np.ndarray): Bounding boxes with shape (N, 4).
+            
+        Returns:
+            torch.Tensor|np.ndarray: Normalized bounding boxes with shape (N, 4).
+        """
+        return boxes / self.img_size
+    
+    
+    def denormalize_image(self, image: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
+        """
+        Denormalize image to original size.
+        
+        Args:
+            image (torch.Tensor|np.ndarray): Normalized image with shape (C, H, W) or (H, W, C).
+            
+        Returns:
+            torch.Tensor|np.ndarray: Denormalized image with shape (C, H, W) or (H, W, C).
+        """
+        return image * 255.0
+    
+    
+    def normalize_image(self, image: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
+        """
+        Normalize image to [0, 1].
+        
+        Args:
+            image (torch.Tensor|np.ndarray): Image with shape (C, H, W) or (H, W, C).
+            
+        Returns:
+            torch.Tensor|np.ndarray: Normalized image with shape (C, H, W) or (H, W, C).
+        """
+        return image / 255.0
