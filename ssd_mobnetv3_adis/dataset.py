@@ -237,7 +237,8 @@ class CachedSSDLITEOBJDET_DATASET(Dataset):
                 dtype: np.dtype=np.float32, 
                 mode: str="train",
                 lmdb_path: str = None,
-                map_size: int=1099511627776) -> None:
+                map_size: int=1099511627776,
+                if_previously_cached: bool = False) -> None:
         """
         Initialize the Cached SSDLITEOBJDET dataset.
         
@@ -250,19 +251,28 @@ class CachedSSDLITEOBJDET_DATASET(Dataset):
             mode (str, optional): The mode of the dataset, either 'train' or 'eval'. Defaults to 'train'.
             lmdb_path (str, optional): Path to the LMDB cache. Defaults to None.
             map_size (int, optional): Size of the LMDB map. Defaults to 1TB.
+            if_previously_cached (bool, optional): Whether the dataset has already been cached. Defaults to False.
         """
         super().__init__()
         
         # initialize attributes
         self.root_dir, self.split, self.img_size, self.num_classes = root_dir, split.lower(), img_size, num_classes
-        self.dtype = dtype
-        self.mode = mode.lower()
+        self.dtype, self.mode = dtype, mode.lower()
         self.dataset_class = dataset_class
         self.map_size = map_size
-        self.lmdb_path = lmdb_path if lmdb_path else os.path.join(self.root_dir, f"{self.split}_cache")
+        self.if_previously_cached = if_previously_cached
         
-        # preprocess the dataset and cache it in lmdb
-        self.preprocess_dataset()
+        if self.if_previously_cached:
+            if lmdb_path is None:
+                raise ValueError("LMDB path must be provided if if_previously_cached is True.")
+            else:                
+                self.lmdb_path = lmdb_path
+            
+        else:    
+            # if lmdb_path is not provided, create a default path    
+            self.lmdb_path = lmdb_path if lmdb_path else os.path.join(self.root_dir, f"{self.split}_cache")
+            # preprocess the dataset and cache it in lmdb
+            self.preprocess_dataset()
         
         # open lmdb environment in read-only mode
         self.env = lmdb.open(self.lmdb_path, readonly=True, lock=False)
