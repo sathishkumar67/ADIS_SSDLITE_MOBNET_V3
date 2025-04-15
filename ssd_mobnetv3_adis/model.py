@@ -173,7 +173,7 @@ class SSD_MOBILENET_V3_Large_Lightning_Config:
 
 
 class SSD_MOBILENET_V3_Large_Lightning(L.LightningModule):
-    def __init__(self, config: SSD_MOBILENET_V3_Large_Ligtning_Config) -> None:
+    def __init__(self, config: SSD_MOBILENET_V3_Large_Lightning_Config) -> None:
         """
         Initialize the SSD MobileNet V3 Large model in PyTorch Lightning.
 
