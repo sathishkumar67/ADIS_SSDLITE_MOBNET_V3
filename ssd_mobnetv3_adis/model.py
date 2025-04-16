@@ -49,7 +49,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
         self.img_size = img_size
         
         # initialize the model
-        self.model = ssdlite320_mobilenet_v3_large(weights='COCO_V1', weights_backbone="IMAGENET1K_V2") 
+        self.model = ssdlite320_mobilenet_v3_large(weights='COCO_V1', weights_backbone="DEFAULT") 
         # modify the model to use the specified number of classes
         self.model.head.classification_head = SSDLiteClassificationHead(
             in_channels=det_utils.retrieve_out_channels(self.model.backbone, (self.img_size, self.img_size)),
@@ -103,7 +103,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
         """
         return self.model(images, targets)
     
-    def load(self, checkpoint_path: dict, key_name: str = "model_state_dict", map_location: str = "cpu") -> None:
+    def load(self, checkpoint_path: str, key_name: str = "model_state_dict", map_location: str = "cpu") -> None:
         """
         Load the model state dict from a checkpoint file.
 
@@ -154,7 +154,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
             progress_bar = tqdm(loader, desc=f"Evaluating {split} set", unit="batch")
             with torch.no_grad():
                 for images, targets in progress_bar:
-                    images = torch.as_tensor(images, dtype=torch.float32, device=device).permute(0, 3, 1, 2)
+                    images = torch.as_tensor(images, dtype=torch.float32, device=device)
                     images.div_(255.0)
 
                     for target in targets:
