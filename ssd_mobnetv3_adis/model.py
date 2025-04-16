@@ -213,7 +213,6 @@ class SSD_MOBILENET_V3_Large_Lightning(L.LightningModule):
         
         # log the loss
         self.log("train_loss", loss, prog_bar=True, logger=True)
-        print(f"Train Loss for batch {batch_idx}: {loss.item()}")
         return loss
     
     def validation_step(self, batch: Tuple[torch.Tensor, dict], batch_idx: int) -> torch.Tensor:
@@ -233,7 +232,6 @@ class SSD_MOBILENET_V3_Large_Lightning(L.LightningModule):
         
         # log the loss
         self.log("val_loss", loss, prog_bar=True, logger=True)
-        print(f"Validation Loss for batch {batch_idx}: {loss.item()}")
         return loss
     
     def configure_optimizers(self) -> torch.optim.Optimizer:
