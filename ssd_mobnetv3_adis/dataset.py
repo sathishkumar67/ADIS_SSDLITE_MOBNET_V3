@@ -209,8 +209,9 @@ def collate_fn(batch) -> Tuple[torch.Tensor, List[Dict[str, torch.Tensor]]]:
     # Process each sample in the batch
     for img, tgt in batch:
         # Convert HWC numpy array to CHW tensor and normalize to [0, 1]
-        img_tensor = torch.from_numpy(img).permute(2, 0, 1).float()
-        img_tensor /= 255.0
+        img_tensor = torch.as_tensor(img, dtype=torch.float32).permute(2, 0, 1)  
+        img_tensor.div_(255.0)  # Normalize to [0, 1]
+        # Append to images list
         images.append(img_tensor)
         
         # Convert annotations to tensors
