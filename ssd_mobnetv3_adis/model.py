@@ -11,7 +11,22 @@ from torchvision.models.detection import ssdlite320_mobilenet_v3_large
 from torchvision.models.detection.ssdlite import SSDLiteClassificationHead
 from torchvision.models.detection import _utils as det_utils
 from torchmetrics.detection import MeanAveragePrecision 
-import lightning as L
+
+
+
+@dataclass  
+class SSD_MOBILENET_V3_Large_Config:
+    """
+    Configuration class for SSD MobileNet V3 Large model in PyTorch Lightning.
+    """
+    classes: List[str]
+    num_classes_with_bg: int 
+    img_size: int = 320
+    lr: float = 0.0001
+    betas: Tuple[float, float] = (0.9, 0.999)
+    weight_decay: float = 0.0001
+    eps: float = 1e-08
+    fused: bool = True
 
 
 
@@ -155,92 +170,3 @@ class SSD_MOBILENET_V3_Large(nn.Module):
                 
         print("Evaluation complete.")
         return results
-
-
-@dataclass  
-class SSD_MOBILENET_V3_Large_Lightning_Config:
-    """
-    Configuration class for SSD MobileNet V3 Large model in PyTorch Lightning.
-    """
-    classes: List[str]
-    num_classes_with_bg: int 
-    img_size: int = 320
-    lr: float = 0.0001
-    betas: Tuple[float, float] = (0.9, 0.999)
-    weight_decay: float = 0.0001
-    eps: float = 1e-08
-    fused: bool = True
-
-
-class SSD_MOBILENET_V3_Large_Lightning(L.LightningModule):
-    def __init__(self, config: SSD_MOBILENET_V3_Large_Lightning_Config) -> None:
-        """
-        Initialize the SSD MobileNet V3 Large model in PyTorch Lightning.
-
-        Args:
-            config (SSD_MOBILENET_V3_Large_Ligtning_Config): Configuration object for the model.
-        
-        Returns:
-            None
-        """
-        super().__init__()
-        
-        # initialize the config
-        self.config = config
-        # initialize the model
-        self.model = SSD_MOBILENET_V3_Large(num_classes_with_bg=self.config.num_classes_with_bg, img_size=self.config.img_size)
-        # get the optimizer
-        self.optimizer = self.configure_optimizers()
-        
-    def training_step(self, batch: Tuple[torch.Tensor, dict], batch_idx: int) -> torch.Tensor:
-        # set the model to training mode
-        self.model.train()
-        optimizer = self.optimizers()
-        optimizer.zero_grad()
-        
-        # get the images and targets from the batch
-        images, targets = batch
-        images = torch.as_tensor(images, dtype=torch.float32) #.permute(0, 3, 1, 2)
-        images.div_(255.0)
-
-        for target in targets:
-            target["boxes"] = torch.as_tensor(target["boxes"], dtype=torch.float32)
-            target["labels"] = torch.as_tensor(target["labels"], dtype=torch.int64)
-
-        # forward pass through the model
-        loss_dict = self.model(images, targets)
-        loss = sum(loss for loss in loss_dict.values())
-        
-        # log the loss
-        self.log("train_loss", loss, prog_bar=True, logger=True)
-        return loss
-    
-    def validation_step(self, batch: Tuple[torch.Tensor, dict], batch_idx: int) -> torch.Tensor:
-        # set the model to evaluation mode
-        self.model.eval()
-        images, targets = batch
-        images = torch.as_tensor(images, dtype=torch.float32)   #.permute(0, 3, 1, 2)
-        images.div_(255.0)
-
-        for target in targets:
-            target["boxes"] = torch.as_tensor(target["boxes"], dtype=torch.float32)
-            target["labels"] = torch.as_tensor(target["labels"], dtype=torch.int64)
-        
-        # forward pass through the model
-        loss_dict = self.model(images, targets)
-        loss = sum(loss for loss in loss_dict.values())
-        
-        # log the loss
-        self.log("val_loss", loss, prog_bar=True, logger=True)
-        return loss
-    
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        """
-        Configure the optimizer for the model.
-        """
-        return self.model.configure_optimizers(
-            lr=self.config.lr, 
-            betas=self.config.betas, 
-            weight_decay=self.config.weight_decay, 
-            eps=self.config.eps, 
-            fused=self.config.fused)
