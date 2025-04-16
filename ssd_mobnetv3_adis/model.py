@@ -57,7 +57,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
             num_classes=self.num_classes_with_bg,
             norm_layer=partial(nn.BatchNorm2d, eps=1e-8, momentum=0.03)
         )
-        self.model.detections_per_img = 100 # need to test this
+        # self.model.detections_per_img = 100 # need to test this
     
     def configure_optimizers(self, lr: float = 0.0001, betas: Tuple[float, float] = (0.9, 0.999), weight_decay: float = 0.0001, eps: float = 1e-08, fused: bool = True) -> torch.optim.Optimizer:  
         """
