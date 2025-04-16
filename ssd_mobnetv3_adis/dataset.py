@@ -271,6 +271,8 @@ class CachedSSDLITEOBJDET_DATASET(Dataset):
         else:    
             # if lmdb_path is not provided, create a default path    
             self.lmdb_path = lmdb_path if lmdb_path else os.path.join(self.root_dir, f"{self.split}_cache")
+            # print statement to indicate caching is being done
+            print(f"Preprocessing dataset and caching to {self.lmdb_path}...")
             # preprocess the dataset and cache it in lmdb
             self.preprocess_dataset()
         
