@@ -127,67 +127,10 @@ class SSDLITEOBJDET_DATASET(Dataset):
             # Validate class IDs
             if np.all((valid_labels < 0) & (valid_labels >= self.num_classes)):
                 raise ValueError(f"Invalid class ID in {label_path}")
-            
-            # Normalize boxes to [0, 1] for training mode
-            if self.mode == "train":
-                np.divide(valid_boxes, self.img_size, out=valid_boxes) 
-
-            # Return image and bounding boxes
-            return image, {
-                'boxes': valid_boxes,
-                'labels': valid_labels}
         
-        
-    def denormalize_bbox(self, boxes: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        """
-        Denormalize bounding boxes to original size.
-        
-        Args:
-            boxes (torch.Tensor|np.ndarray): Normalized bounding boxes with shape (N, 4).
-            
-        Returns:
-            torch.Tensor|np.ndarray: Denormalized bounding boxes with shape (N, 4).
-        """
-        return boxes * self.img_size
-    
-    
-    def normalize_bbox(self, boxes: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        """
-        Normalize bounding boxes to [0, 1].
-        
-        Args:
-            boxes (torch.Tensor|np.ndarray): Bounding boxes with shape (N, 4).
-            
-        Returns:
-            torch.Tensor|np.ndarray: Normalized bounding boxes with shape (N, 4).
-        """
-        return boxes / self.img_size
-    
-    
-    def denormalize_image(self, image: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        """
-        Denormalize image to original size.
-        
-        Args:
-            image (torch.Tensor|np.ndarray): Normalized image with shape (C, H, W) or (H, W, C).
-            
-        Returns:
-            torch.Tensor|np.ndarray: Denormalized image with shape (C, H, W) or (H, W, C).
-        """
-        return image * 255.0
-    
-    
-    def normalize_image(self, image: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        """
-        Normalize image to [0, 1].
-        
-        Args:
-            image (torch.Tensor|np.ndarray): Image with shape (C, H, W) or (H, W, C).
-            
-        Returns:
-            torch.Tensor|np.ndarray: Normalized image with shape (C, H, W) or (H, W, C).
-        """
-        return image / 255.0
+        return image, {
+            'boxes': valid_boxes,
+            'labels': valid_labels}
     
 
 def collate_fn(batch) -> Tuple[torch.Tensor, List[Dict[str, torch.Tensor]]]:
@@ -210,7 +153,7 @@ def collate_fn(batch) -> Tuple[torch.Tensor, List[Dict[str, torch.Tensor]]]:
     for img, tgt in batch:
         # Convert HWC numpy array to CHW tensor and normalize to [0, 1]
         img_tensor = torch.as_tensor(img, dtype=torch.float32).permute(2, 0, 1)  
-        img_tensor.div_(255.0)  # Normalize to [0, 1]
+        
         # Append to images list
         images.append(img_tensor)
         
@@ -330,55 +273,3 @@ class CachedSSDLITEOBJDET_DATASET(Dataset):
         # delete the root directory
         shutil.rmtree(os.path.join(self.root_dir, self.split))
         del dataset
-    
-    
-    def denormalize_bbox(self, boxes: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        """
-        Denormalize bounding boxes to original size.
-        
-        Args:
-            boxes (torch.Tensor|np.ndarray): Normalized bounding boxes with shape (N, 4).
-            
-        Returns:
-            torch.Tensor|np.ndarray: Denormalized bounding boxes with shape (N, 4).
-        """
-        return boxes * self.img_size
-    
-    
-    def normalize_bbox(self, boxes: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        """
-        Normalize bounding boxes to [0, 1].
-        
-        Args:
-            boxes (torch.Tensor|np.ndarray): Bounding boxes with shape (N, 4).
-            
-        Returns:
-            torch.Tensor|np.ndarray: Normalized bounding boxes with shape (N, 4).
-        """
-        return boxes / self.img_size
-    
-    
-    def denormalize_image(self, image: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        """
-        Denormalize image to original size.
-        
-        Args:
-            image (torch.Tensor|np.ndarray): Normalized image with shape (C, H, W) or (H, W, C).
-            
-        Returns:
-            torch.Tensor|np.ndarray: Denormalized image with shape (C, H, W) or (H, W, C).
-        """
-        return image * 255.0
-    
-    
-    def normalize_image(self, image: torch.Tensor|np.ndarray) -> torch.Tensor|np.ndarray:
-        """
-        Normalize image to [0, 1].
-        
-        Args:
-            image (torch.Tensor|np.ndarray): Image with shape (C, H, W) or (H, W, C).
-            
-        Returns:
-            torch.Tensor|np.ndarray: Normalized image with shape (C, H, W) or (H, W, C).
-        """
-        return image / 255.0
