@@ -40,6 +40,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
             norm_layer=partial(nn.BatchNorm2d, eps=1e-8, momentum=0.03)
         )
         self.model.detections_per_img = 100 # need to test this
+
     
     def configure_optimizers(self, lr: float = 0.0001, betas: Tuple[float, float] = (0.9, 0.999), weight_decay: float = 0.0001, eps: float = 1e-08, fused: bool = True) -> torch.optim.Optimizer:  
         """
@@ -72,6 +73,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
                                     eps=eps, 
                                     fused=fused)
     
+    
     def forward(self, images: torch.Tensor, targets: dict=None) :
         """
         Forward pass through the model.
@@ -84,6 +86,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
             torch.Tensor: Model output predictions.
         """
         return self.model(images, targets)
+    
     
     def load(self, checkpoint_path: str, key_name: str = "model_state_dict", map_location: str = "cpu") -> None:
         """
@@ -98,6 +101,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
         print(f"Loading checkpoint from {checkpoint_path}...")
         self.load_state_dict(torch.load(checkpoint_path, map_location=map_location)[key_name])
         print(f"Checkpoint loaded in {time.time() - start_time:.2f} seconds.")
+        
         
     def evaluate(self, dataloaders: dict[str, torch.utils.data.DataLoader], device: torch.device|str) -> dict[str, dict[str, float]]:
         """
