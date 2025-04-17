@@ -1,6 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Tuple, List
+from typing import Tuple
 import time
 from tqdm import tqdm
 from functools import partial
@@ -11,23 +10,6 @@ from torchvision.models.detection import ssdlite320_mobilenet_v3_large
 from torchvision.models.detection.ssdlite import SSDLiteClassificationHead
 from torchvision.models.detection import _utils as det_utils
 from torchmetrics.detection import MeanAveragePrecision 
-
-
-
-@dataclass  
-class SSD_MOBILENET_V3_Large_Config:
-    """
-    Configuration class for SSD MobileNet V3 Large model in PyTorch Lightning.
-    """
-    classes: List[str]
-    num_classes_with_bg: int 
-    img_size: int = 320
-    lr: float = 0.0001
-    betas: Tuple[float, float] = (0.9, 0.999)
-    weight_decay: float = 0.0001
-    eps: float = 1e-08
-    fused: bool = True
-
 
 
 class SSD_MOBILENET_V3_Large(nn.Module):
