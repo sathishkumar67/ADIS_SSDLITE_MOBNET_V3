@@ -140,13 +140,6 @@ class SSD_MOBILENET_V3_Large(nn.Module):
             progress_bar = tqdm(loader, desc=f"Evaluating {split} set", unit="batch")
             with torch.no_grad():
                 for images, targets in progress_bar:
-                    images = torch.as_tensor(images, dtype=torch.float32, device=device)
-                    images.div_(255.0)
-
-                    for target in targets:
-                        target["boxes"] = torch.as_tensor(target["boxes"], dtype=torch.float32, device=device)
-                        target["labels"] = torch.as_tensor(target["labels"], dtype=torch.int64, device=device)
-                    
                     # pass the images only to the model
                     outputs = self(images)
                     # update the metric with the outputs and targets
