@@ -117,7 +117,7 @@ class SSDLITEOBJDET_DATASET(Dataset):
 
             # Adjust class IDs (cid from first column)
             valid_labels = data[valid_mask, 0].astype(np.uint8) 
-            np.add(valid_labels, 1, out=valid_labels)  # Increment class IDs by 1 for background class
+            # np.add(valid_labels, 1, out=valid_labels)  # Increment class IDs by 1 for background class
 
             # scale boxes to new image size
             scale_factors = np.array([self.img_size / orig_width, self.img_size / orig_height,
