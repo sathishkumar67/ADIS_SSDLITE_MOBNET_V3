@@ -7,3 +7,4 @@ opencv-python==4.11.0.86
 tqdm==4.67.1
 numpy==1.26.4
 torchmetrics==1.7.1
+joblib==1.4.2
