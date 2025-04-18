@@ -37,7 +37,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
             in_channels=det_utils.retrieve_out_channels(self.model.backbone, (self.img_size, self.img_size)),
             num_anchors=self.model.anchor_generator.num_anchors_per_location(),
             num_classes=self.num_classes_with_bg,
-            norm_layer=partial(nn.BatchNorm2d, eps=1e-8, momentum=0.03)
+            norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.03)
         )
         self.model.detections_per_img = 100 # need to test this
 
