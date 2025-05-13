@@ -12,7 +12,7 @@ from torchvision.models.detection import _utils as det_utils
 from torchmetrics.detection import MeanAveragePrecision 
 
 
-class SSD_MOBILENET_V3_Large(nn.Module):
+class SSDLITE_MOBILENET_V3_Large(nn.Module):
     def __init__(self, num_classes_with_bg:int, img_size: int=320) -> None:
         """
         Initialize the SSD MobileNet V3 Large model.
@@ -24,7 +24,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
         Returns:
             None
         """
-        super(SSD_MOBILENET_V3_Large, self).__init__()
+        super().__init__()
         
         # initialize attributes
         self.num_classes_with_bg = num_classes_with_bg
@@ -32,7 +32,7 @@ class SSD_MOBILENET_V3_Large(nn.Module):
         
         # initialize the model
         # model weights can be changed based on the requirements
-        self.model = ssdlite320_mobilenet_v3_large(weights='COCO_V1', weights_backbone="DEFAULT") 
+        self.model = ssdlite320_mobilenet_v3_large(weights='COCO_V1', weights_backbone="DEFAULT")
         # modify the model to use the specified number of classes
         self.model.head.classification_head = SSDLiteClassificationHead(
             in_channels=det_utils.retrieve_out_channels(self.model.backbone, (self.img_size, self.img_size)),
