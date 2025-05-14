@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import zipfile
 from tqdm import tqdm
+import torch.nn as nn
 
 def unzip_file(zip_path: str, target_dir: str) -> None:
     """
@@ -35,3 +36,15 @@ def unzip_file(zip_path: str, target_dir: str) -> None:
     # Optionally, you can remove the zip file after extraction
     os.remove(zip_path)
     print(f"Removed zip file: {zip_path}")
+    
+    
+def replace_activation_function(module: nn.Module, activation_fn) -> None:
+    for name, child in module.named_children():
+        # catch both ReLU and ReLU6
+        if isinstance(child, (nn.ReLU, nn.ReLU6)):
+            # replace the activation function with the new one
+            setattr(module, name, activation_fn)
+        else:
+            # recursively call the function for child modules
+            replace_activation_function(child, activation_fn)
+            
