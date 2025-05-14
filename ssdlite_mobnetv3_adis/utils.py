@@ -38,7 +38,7 @@ def unzip_file(zip_path: str, target_dir: str) -> None:
     print(f"Removed zip file: {zip_path}")
     
     
-def replace_activation_function(module: nn.Module, activation_fn) -> None:
+def replace_activation_function(module, activation_fn) -> None:
     for name, child in module.named_children():
         # catch both ReLU and ReLU6
         if isinstance(child, (nn.ReLU, nn.ReLU6)):
