@@ -47,4 +47,4 @@ def replace_activation_function(module: nn.Module, activation_fn) -> None:
         else:
             # recursively call the function for child modules
             replace_activation_function(child, activation_fn)
-            
+    print("Successfully replaced activation functions in the model.")
