@@ -1,3 +1,10 @@
+# from typing import Tuple
+# import pandas as pd
+# from torchvision.ops import box_iou
+# from collections import defaultdict
+# from torchmetrics.detection import MeanAveragePrecision
+
+
 # def evaluate_model(model, dataloader, device, iou_threshold=0.5):
 #     metric = MeanAveragePrecision(
 #         box_format='xyxy',
