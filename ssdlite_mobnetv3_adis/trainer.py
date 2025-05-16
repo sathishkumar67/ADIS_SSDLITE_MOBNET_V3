@@ -130,7 +130,7 @@ def train(
                 print(f"Early stopping at epoch {epoch} (no improvement for {args['patience']} epochs)")
                 break
             
-            
+                        
 def bohb_tunner(
     args: dict,
     model: nn.Module,
@@ -148,6 +148,7 @@ def bohb_tunner(
             - num_epochs (int): Total number of epochs for training.
             - patience (int): Early stopping patience in epochs (val loss based).
             - initial_lr (float): Initial learning rate.
+            - lr_factor (float): Factor to reduce learning rate.
             - start_factor (float): Start factor for linear warmup.
             - end_factor (float): End factor for linear warmup.
         model (nn.Module): The detection model.
@@ -155,8 +156,6 @@ def bohb_tunner(
         dataloaders (dict): Dict with 'train' and 'val' DataLoader.
         callback (Callable): Callback function for BOHB.
     """
-    # Create output directory if it doesn't exist
-    os.makedirs(args["output_dir"], exist_ok=True)
     # Unpack dataloaders
     train_loader, val_loader = dataloaders['train'], dataloaders['val']
 
@@ -222,7 +221,7 @@ def bohb_tunner(
         avg_val_loss = total_val_loss / len(val_loader)
         
         # report the average validation loss to the BOHB callback
-        callback(epoch+1, avg_val_loss)
+        callback(avg_val_loss, epoch)
 
         # Print training and validation loss
         print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
@@ -236,5 +235,6 @@ def bohb_tunner(
             if patience_counter >= args["patience"]:
                 print(f"Early stopping at epoch {epoch} (no improvement for {args['patience']} epochs)")
                 break
-            
+    
+    # return the best validation loss
     return best_val_loss
