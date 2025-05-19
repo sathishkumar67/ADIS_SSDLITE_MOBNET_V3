@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import numpy as np
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -38,6 +39,10 @@ def train(
     # Unpack dataloaders
     train_loader, val_loader = dataloaders['train'], dataloaders['val']
 
+    # Prepare lists for tracking loss
+    training_loss = []
+    validation_loss = []
+
     # Set up LR schedulers: linear warmup then cosine annealing
     scheduler_warmup = LinearLR(optimizer, start_factor=args["start_factor"], end_factor=args["end_factor"], total_iters=args["warmup_epochs"])
     scheduler_cosine = CosineAnnealingLR(optimizer, T_max=(args["num_epochs"] - args["warmup_epochs"]), eta_min=args["initial_lr"] * args["lr_factor"])
@@ -55,65 +60,49 @@ def train(
     for epoch in range(1, args["num_epochs"] + 1):
         # Training
         model.train()
-        # Initialize total loss for the epoch
         total_loss = 0.0
-        # Create a tqdm progress bar for training
         train_bar = tqdm(train_loader, desc=f"Epoch {epoch}/{args['num_epochs']}", unit="batch")
         for images, targets in train_bar:
-            # Move images to device
             images = images.to(args["device"])
-            # Move targets to device
             targets = [{k: v.to(args["device"]) for k, v in t.items()} for t in targets]
 
-            # Forward pass and compute loss
             loss_dict = model(images, targets)
             loss = sum(loss for loss in loss_dict.values())
 
-            # Backward pass and optimization
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            # Update EMA
             with torch.no_grad():
                 for name, param in model.state_dict().items():
                     ema_model[name] = args["ema_decay"] * ema_model[name] + (1 - args["ema_decay"]) * param.detach().cpu()
 
-            # Accumulate loss
             total_loss += loss.item()
             train_bar.set_postfix(loss=loss.item(), lr=optimizer.param_groups[0]['lr'])
 
-        # Calculate average loss for the epoch
         avg_train_loss = total_loss / len(train_loader)
+        training_loss.append(avg_train_loss)
 
         # Step scheduler
         scheduler.step()
 
         # Validation
         total_val_loss = 0.0
-        # no gradient calculation for validation
         with torch.no_grad():
-            # Create a tqdm progress bar for validation
             for images, targets in tqdm(val_loader, desc="Validating", unit="batch"):
-                # Move images to device
                 images = images.to(args["device"])
-                # Move targets to device
                 targets = [{k: v.to(args["device"]) for k, v in t.items()} for t in targets]
-                # Forward pass and compute loss
                 loss_dict = model(images, targets)
-                # Accumulate validation loss
                 total_val_loss += sum(loss for loss in loss_dict.values()).item()
-        # Calculate average validation loss
         avg_val_loss = total_val_loss / len(val_loader)
+        validation_loss.append(avg_val_loss)
 
-        # Print training and validation loss
         print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
 
         # Early stopping on val loss
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             patience_counter = 0
-            # Save best checkpoint (model + EMA + optimizer)
             checkpoint = {
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -121,7 +110,6 @@ def train(
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_val_loss': best_val_loss,
             }
-            # Save the checkpoint to the specified output directory
             torch.save(checkpoint, os.path.join(args["output_dir"], 'best_checkpoint.pth'))
             print(f"Saved new best model (Val Loss={best_val_loss:.4f})")
         else:
@@ -129,6 +117,13 @@ def train(
             if patience_counter >= args["patience"]:
                 print(f"Early stopping at epoch {epoch} (no improvement for {args['patience']} epochs)")
                 break
+
+    # After training, save loss arrays
+    training_loss = np.array(training_loss)
+    validation_loss = np.array(validation_loss)
+    np.save(os.path.join(args["output_dir"], 'training_loss.npy'), training_loss)
+    np.save(os.path.join(args["output_dir"], 'validation_loss.npy'), validation_loss)
+    print("Saved training and validation loss arrays")
             
                         
 def bohb_tunner(
