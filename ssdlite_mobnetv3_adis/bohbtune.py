@@ -1,9 +1,24 @@
+from __future__ import annotations
+import torch
+from .model import SSDLITE_MOBILENET_V3_Large
+from .trainer import bohb_tunner
+from torch import optim
+import optuna
+import joblib
+from tqdm import tqdm
+
 # constants
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 WARMUP_EPOCHS = 10
 NUM_EPOCHS = 100
 PATIENCE = 10
 END_FACTOR = 1.0
+LOCAL_DIR = "" # replace with your local directory
+NUM_CLASSES_WITH_BG = 0 # replace with your number of classes with background
+
+# define the dataloaders
+train_loader = None  # replace with your train dataloader
+val_loader = None  # replace with your validation dataloader
 
 # define the objective function
 def objective(trial):
@@ -14,10 +29,9 @@ def objective(trial):
             raise optuna.TrialPruned()
         
     # suggest hyperparameters for the model
-    INITIAL_LR = trial.suggest_float("INITIAL_LR", 1e-4, 1e-1, log=True)
-    LR_FACTOR = trial.suggest_float("LR_FACTOR", 1e-4, 1e-1, log=True)
-    START_FACTOR = trial.suggest_float("START_FACTOR", 1e-4, 1e-1, log=True)
-    WEIGHT_DECAY = trial.suggest_float("WEIGHT_DECAY", 1e-4, 1e-1, log=True)
+    INITIAL_LR = trial.suggest_float("INITIAL_LR", 1e-5, 1e-1, log=True)
+    START_FACTOR = trial.suggest_float("START_FACTOR", 1e-5, 1e-1, log=True)
+    WEIGHT_DECAY = trial.suggest_float("WEIGHT_DECAY", 1e-5, 1e-1, log=True)
     MOMENTUM = trial.suggest_float("MOMENTUM", 0.7, 0.99)
     
     # create the model
@@ -42,8 +56,6 @@ def objective(trial):
             "warmup_epochs": WARMUP_EPOCHS,
             "num_epochs": NUM_EPOCHS,
             "patience": PATIENCE,
-            "initial_lr": INITIAL_LR,
-            "lr_factor": LR_FACTOR,
             "start_factor": START_FACTOR,
             "end_factor": END_FACTOR
         },
@@ -54,6 +66,7 @@ def objective(trial):
     )
     # return the best validation loss
     return best_val_loss
+
 
 # define the number of trials
 NUM_TRIALS = 5
