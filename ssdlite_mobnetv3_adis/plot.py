@@ -1,12 +1,14 @@
 from __future__ import annotations
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import torch
-import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import precision_recall_curve, auc
-from torchvision.ops import box_iou
+import matplotlib.pyplot as plt
+import seaborn as sns
 from tqdm import tqdm
+from sklearn.metrics import precision_recall_curve, auc, confusion_matrix
+from torchvision.ops import box_iou
 
+# Plot precision-recall curves for all classes function
 def plot_precision_recall_curves(
     CLASSES: List[str],
     num_classes: int,
@@ -14,6 +16,7 @@ def plot_precision_recall_curves(
     model: torch.nn.Module,
     dataloader: torch.utils.data.DataLoader,
     device: torch.device,
+    dataset_name: str = "Validation",
     figsize: Tuple[int, int] = (8, 8),
     show_mean: bool = True
     ) -> None:
@@ -98,8 +101,70 @@ def plot_precision_recall_curves(
     # Plot formatting
     plt.xlabel('Recall')
     plt.ylabel('Precision')
-    plt.title(f'Precision–Recall Curves for All Classes (IoU ≥ {IOU_THRESHOLD:.2f})')
+    plt.title(f'Precision–Recall Curves for All Classes (IoU ≥ {IOU_THRESHOLD:.2f}) ({dataset_name})')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+
+
+
+# Plotting confusion matrix function
+def plot_confusion_matrix(
+    model: torch.nn.Module,
+    dataloader: torch.utils.data.DataLoader,
+    device: torch.device,
+    class_names: List[str],
+    num_classes: int,
+    figsize: Optional[tuple] = (10, 8),
+    title: Optional[str] = None
+    ) -> None:
+    """
+    Plots the confusion matrix for a given model and dataloader.
+
+    Args:
+        model (torch.nn.Module): Trained model for evaluation.
+        dataloader (torch.utils.data.DataLoader): DataLoader for evaluation.
+        device (torch.device): Device to run model on.
+        class_names (List[str]): List of class names for axis labels.
+        num_classes (int): Number of classes (excluding background).
+        figsize (tuple, optional): Size of the plot. Defaults to (10, 8).
+        title (str, optional): Title for the plot. Defaults to None.
+
+    Returns:
+        None. Displays the confusion matrix plot.
+    """
+    print("[Confusion Matrix] Initializing collection of predictions and ground truths...")
+    all_gt: List[int] = []
+    all_pred: List[int] = []
+    model.eval()
+    with torch.no_grad():
+        for images, targets in tqdm(dataloader, desc="Inference", leave=True):
+            # Move images to device
+            images = images.to(device) if isinstance(images, torch.Tensor) else [img.to(device) for img in images]
+            outputs = model(images)
+            for out, tgt in zip(outputs, targets):
+                gt_labels = tgt["labels"].cpu().numpy()
+                pred_labels = out["labels"].cpu().numpy()
+                # If no predictions, count all GT as missed (-1 for missed predictions)
+                if len(pred_labels) == 0:
+                    all_gt.extend(gt_labels)
+                    all_pred.extend([-1]*len(gt_labels))
+                else:
+                    # Match predictions to GT by order (for summary, not strict evaluation)
+                    min_len = min(len(gt_labels), len(pred_labels))
+                    all_gt.extend(gt_labels[:min_len])
+                    all_pred.extend(pred_labels[:min_len])
+                    
+    print("[Confusion Matrix] Computing confusion matrix...")
+    cm = confusion_matrix(all_gt, all_pred, labels=list(range(1, num_classes+1)))
+    plt.figure(figsize=figsize)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+    plot_title = title if title is not None else 'Confusion Matrix'
+    plt.title(plot_title)
+    plt.tight_layout()
+    plt.show()
+    print("[Confusion Matrix] Plot displayed. Function complete.")
