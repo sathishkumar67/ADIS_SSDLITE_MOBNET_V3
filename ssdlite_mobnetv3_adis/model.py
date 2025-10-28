@@ -1,3 +1,11 @@
+"""Model definition for SSDLite with MobileNetV3 backbone.
+
+This module wraps torchvision's prebuilt SSDLite+MobileNetV3 model and
+exposes a small convenience class (`SSDLITE_MOBILENET_V3_Large`) that adjusts
+the classification head to match the number of classes in our dataset and
+provides an optimizer helper.
+"""
+
 from __future__ import annotations
 from typing import Tuple
 from functools import partial

@@ -1,3 +1,9 @@
+"""Small utility helpers used across the project.
+
+Currently provides `unzip_file` which extracts a zip archive with a
+progress bar. Add other lightweight helpers here as needed.
+"""
+
 from __future__ import annotations
 import os
 import zipfile

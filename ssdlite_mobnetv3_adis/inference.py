@@ -1,3 +1,12 @@
+"""Lightweight inference visualization helpers.
+
+This file contains short snippets and helpers for visualizing detection
+predictions (e.g., drawing bounding boxes on images). It is intentionally
+minimal — the notebook imports and uses visualization code where needed.
+"""
+
+# Example snippet (commented out) showing how to draw a box on an image
+# using matplotlib. Keep as a small reference for interactive debugging.
 # import matplotlib.pyplot as plt
 # import matplotlib.patches as patches
 # plt.imshow(images[2].cpu().permute(1, 2, 0).int().numpy())

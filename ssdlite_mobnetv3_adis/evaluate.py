@@ -1,3 +1,10 @@
+"""Evaluation helpers.
+
+This module contains functions to compute per-class metrics and mAP using
+TorchMetrics. The APIs accept a model and dataloader and return a pandas
+DataFrame summarizing per-class accuracy, precision, recall, F1 and IoU.
+"""
+
 from __future__ import annotations
 import time
 import torch
@@ -6,6 +13,7 @@ from tqdm import tqdm
 from collections import defaultdict
 from torchvision.ops import box_iou
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
+
 
 # compute and print average metrics for a model and dataloader
 def compute_average_metrics(

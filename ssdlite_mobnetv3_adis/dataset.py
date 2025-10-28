@@ -1,3 +1,11 @@
+"""Dataset utilities for the SSDLite-MobileNetV3 experiments.
+
+This module provides dataset classes and collate helpers used by the training
+and evaluation scripts. It includes a lightweight on-disk LMDB cache wrapper
+(`CachedSSDLITEOBJDET_DATASET`) that preprocesses raw image/label pairs once
+and reads them efficiently for training/evaluation.
+"""
+
 from __future__ import annotations
 from typing import Tuple, List, Dict
 import os

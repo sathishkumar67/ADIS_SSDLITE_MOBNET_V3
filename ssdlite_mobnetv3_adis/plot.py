@@ -1,3 +1,11 @@
+"""Plotting helpers: precision-recall curves and confusion matrices.
+
+This module provides convenient plotting functions used in the notebook and
+scripts to visualize model performance (precision-recall per class and
+confusion matrices). The plotting functions accept PyTorch models and
+DataLoaders and use matplotlib / seaborn for visualization.
+"""
+
 from __future__ import annotations
 from typing import List, Tuple, Optional
 import torch

@@ -1,3 +1,11 @@
+"""Training utilities and helpers.
+
+This module provides training loops used by the project including a standard
+`train` loop and a `bohb_tunner` wrapper that reports progress to hyperparameter
+tuning callbacks. The implementations use PyTorch and provide common
+functionality: warmup schedulers, early stopping, checkpointing, and logging.
+"""
+
 from __future__ import annotations
 import os
 import numpy as np

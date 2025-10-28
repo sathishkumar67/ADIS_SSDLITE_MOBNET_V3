@@ -1,3 +1,11 @@
+"""Hyperparameter tuning helpers using BOHB/Optuna.
+
+This module provides an example objective function for tuning the SSDLite
+MobileNetV3 model using Optuna and the BOHB tuner. The code is provided as a
+convenient script-like helper: edit constants (data paths, dataloaders, etc.)
+before running in your environment.
+"""
+
 from __future__ import annotations
 import torch
 from .model import SSDLITE_MOBILENET_V3_Large
@@ -7,21 +15,34 @@ import optuna
 import joblib
 from tqdm import tqdm
 
-# constants
+# Constants (update these before running in your environment)
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 WARMUP_EPOCHS = 10
 NUM_EPOCHS = 100
 PATIENCE = 10
 END_FACTOR = 1.0
-LOCAL_DIR = "" # replace with your local directory
-NUM_CLASSES_WITH_BG = 0 # replace with your number of classes with background
+LOCAL_DIR = ""  # replace with your local directory
+NUM_CLASSES_WITH_BG = 0  # replace with your number of classes including background
 
-# define the dataloaders
+# Placeholder dataloaders — set these before running
 train_loader = None  # replace with your train dataloader
 val_loader = None  # replace with your validation dataloader
 
-# define the objective function
+
 def objective(trial):
+    """Optuna objective for tuning the SSDLite model.
+
+    This function builds a model and optimizer from trial-suggested
+    hyperparameters, runs the `bohb_tunner` training loop and reports
+    intermediate results via the provided callback. It returns the best
+    validation loss observed for the trial.
+
+    Args:
+        trial (optuna.trial.Trial): Optuna trial object used to suggest hyperparameters.
+
+    Returns:
+        float: Best validation loss observed by the tuner for this trial.
+    """
     # define callback to report intermidiate results
     def on_train_epoch_end(score, epoch):
         trial.report(score, step=epoch)  
@@ -64,7 +85,7 @@ def objective(trial):
         dataloaders={"train":train_loader, "val":val_loader},
         callback=on_train_epoch_end
     )
-    # return the best validation loss
+    # Return the best validation loss observed by the tuner
     return best_val_loss
 
 
