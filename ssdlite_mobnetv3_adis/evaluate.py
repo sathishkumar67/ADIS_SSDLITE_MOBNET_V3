@@ -26,6 +26,7 @@ def compute_average_metrics(
     ) -> pd.DataFrame:
     """
     Computes per-class metrics (accuracy, precision, recall, f1-score, IoU, mAP@50, mAP@50:95) for a model and dataloader.
+    mAP@50, mAP@50:95 are computed as averages over all classes.
 
     Args:
         model (torch.nn.Module): Trained model for evaluation.
