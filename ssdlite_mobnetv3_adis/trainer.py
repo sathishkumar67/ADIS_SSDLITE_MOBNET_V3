@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import LinearLR
+from .utils import GPUMonitor
 
 
 
@@ -60,61 +61,70 @@ def train(
     best_val_loss = float('inf')
     patience_counter = 0
 
-    # Training loop
-    for epoch in range(1, args["num_epochs"] + 1):
-        model.train()
-        total_loss = 0.0
-        train_bar = tqdm(train_loader, desc=f"Epoch {epoch}/{args['num_epochs']}", unit="batch")
-        for images, targets in train_bar:
-            images = images.to(args["device"])
-            targets = [{k: v.to(args["device"]) for k, v in t.items()} for t in targets]
-
-            loss_dict = model(images, targets)
-            loss = sum(loss for loss in loss_dict.values())
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            total_loss += loss.item()
-            train_bar.set_postfix(loss=loss.item(), lr=optimizer.param_groups[0]['lr'])
-
-        avg_train_loss = total_loss / len(train_loader)
-        training_loss.append(avg_train_loss)
-
-        # Step scheduler
-        scheduler.step()
-
-        # Validation
-        total_val_loss = 0.0
-        with torch.no_grad():
-            for images, targets in tqdm(val_loader, desc="Validating", unit="batch"):
+    # Training loop with energy monitoring
+    device_idx = args["device"].index if args["device"].type == 'cuda' and args["device"].index is not None else 0
+    with GPUMonitor(device_index=device_idx) as monitor:
+        for epoch in range(1, args["num_epochs"] + 1):
+            model.train()
+            total_loss = 0.0
+            train_bar = tqdm(train_loader, desc=f"Epoch {epoch}/{args['num_epochs']}", unit="batch")
+            for images, targets in train_bar:
                 images = images.to(args["device"])
                 targets = [{k: v.to(args["device"]) for k, v in t.items()} for t in targets]
+
                 loss_dict = model(images, targets)
-                total_val_loss += sum(loss for loss in loss_dict.values()).item()
-        avg_val_loss = total_val_loss / len(val_loader)
-        validation_loss.append(avg_val_loss)
+                loss = sum(loss for loss in loss_dict.values())
 
-        print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-        # Early stopping on val loss
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
-            patience_counter = 0
-            checkpoint = {
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'best_val_loss': best_val_loss,
-            }
-            torch.save(checkpoint, os.path.join(args["output_dir"], 'best_checkpoint.pth'))
-            print(f"Saved new best model (Val Loss={best_val_loss:.4f})")
-        else:
-            patience_counter += 1
-            if patience_counter >= args["patience"]:
-                print(f"Early stopping at epoch {epoch} (no improvement for {args['patience']} epochs)")
-                break
+                total_loss += loss.item()
+                train_bar.set_postfix(loss=loss.item(), lr=optimizer.param_groups[0]['lr'])
+
+            avg_train_loss = total_loss / len(train_loader)
+            training_loss.append(avg_train_loss)
+
+            # Step scheduler
+            scheduler.step()
+
+            # Validation
+            total_val_loss = 0.0
+            with torch.no_grad():
+                for images, targets in tqdm(val_loader, desc="Validating", unit="batch"):
+                    images = images.to(args["device"])
+                    targets = [{k: v.to(args["device"]) for k, v in t.items()} for t in targets]
+                    loss_dict = model(images, targets)
+                    total_val_loss += sum(loss for loss in loss_dict.values()).item()
+            avg_val_loss = total_val_loss / len(val_loader)
+            validation_loss.append(avg_val_loss)
+
+            print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
+
+            # Early stopping on val loss
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                patience_counter = 0
+                checkpoint = {
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'best_val_loss': best_val_loss,
+                }
+                torch.save(checkpoint, os.path.join(args["output_dir"], 'best_checkpoint.pth'))
+                print(f"Saved new best model (Val Loss={best_val_loss:.4f})")
+            else:
+                patience_counter += 1
+                if patience_counter >= args["patience"]:
+                    print(f"Early stopping at epoch {epoch} (no improvement for {args['patience']} epochs)")
+                    break
+
+    # Report energy metrics
+    energy_metrics = monitor.get_metrics()
+    print(f"\n[Training Energy Summary]")
+    print(f"Average GPU Power: {energy_metrics['avg_power_w']:.2f} W")
+    print(f"Total GPU Energy Consumption: {energy_metrics['total_energy_j']:.2f} J")
+    print(f"Total Training Duration: {energy_metrics['duration_s']:.2f} s")
 
     # After training, save loss arrays
     training_loss = np.array(training_loss)
@@ -165,50 +175,58 @@ def bohb_tunner(
     best_val_loss = float('inf')
     patience_counter = 0
 
-    for epoch in range(1, args["num_epochs"] + 1):
-        # Training phase
-        model.train()
-        total_loss = 0.0
-        for images, targets in tqdm(train_loader, desc=f"Epoch {epoch}/{args['num_epochs']}", unit="batch"):
-            images = images.to(args["device"])
-            targets = [{k: v.to(args["device"]) for k, v in t.items()} for t in targets]
-
-            loss_dict = model(images, targets)
-            loss = sum(loss for loss in loss_dict.values())
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            total_loss += loss.item()
-
-        avg_train_loss = total_loss / len(train_loader)
-
-        # Step scheduler
-        scheduler.step()
-
-        # Validation phase
-        total_val_loss = 0.0
-        with torch.no_grad():
-            for images, targets in tqdm(val_loader, desc="Validating", unit="batch"):
+    device_idx = args["device"].index if args["device"].type == 'cuda' and args["device"].index is not None else 0
+    with GPUMonitor(device_index=device_idx) as monitor:
+        for epoch in range(1, args["num_epochs"] + 1):
+            # Training phase
+            model.train()
+            total_loss = 0.0
+            for images, targets in tqdm(train_loader, desc=f"Epoch {epoch}/{args['num_epochs']}", unit="batch"):
                 images = images.to(args["device"])
                 targets = [{k: v.to(args["device"]) for k, v in t.items()} for t in targets]
+
                 loss_dict = model(images, targets)
-                total_val_loss += sum(loss for loss in loss_dict.values()).item()
-        avg_val_loss = total_val_loss / len(val_loader)
+                loss = sum(loss for loss in loss_dict.values())
 
-        # Report to BOHB
-        callback(avg_val_loss, epoch)
-        print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-        # Early stopping
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
-            patience_counter = 0
-        else:
-            patience_counter += 1
-            if patience_counter >= args["patience"]:
-                print(f"Early stopping at epoch {epoch} (no improvement for {args['patience']} epochs)")
-                break
+                total_loss += loss.item()
+
+            avg_train_loss = total_loss / len(train_loader)
+
+            # Step scheduler
+            scheduler.step()
+
+            # Validation phase
+            total_val_loss = 0.0
+            with torch.no_grad():
+                for images, targets in tqdm(val_loader, desc="Validating", unit="batch"):
+                    images = images.to(args["device"])
+                    targets = [{k: v.to(args["device"]) for k, v in t.items()} for t in targets]
+                    loss_dict = model(images, targets)
+                    total_val_loss += sum(loss for loss in loss_dict.values()).item()
+            avg_val_loss = total_val_loss / len(val_loader)
+
+            # Report to BOHB
+            callback(avg_val_loss, epoch)
+            print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
+
+            # Early stopping
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= args["patience"]:
+                    print(f"Early stopping at epoch {epoch} (no improvement for {args['patience']} epochs)")
+                    break
+
+    # Report energy metrics for tuning trial
+    energy_metrics = monitor.get_metrics()
+    print(f"\n[Tuning Trial Energy Summary]")
+    print(f"Average GPU Power: {energy_metrics['avg_power_w']:.2f} W")
+    print(f"Total GPU Energy Consumption: {energy_metrics['total_energy_j']:.2f} J")
 
     return best_val_loss
