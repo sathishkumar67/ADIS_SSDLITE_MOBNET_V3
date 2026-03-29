@@ -31,7 +31,8 @@ def evaluate_with_energy(
     counters = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0, "support": 0})
     total_images = 0
     total_inference_time = 0.0
-    true_negatives = 0 # Images with no GT and no detections
+    # True Negatives: Images where a class is NOT present and NOT detected
+    true_negatives_per_class = defaultdict(int) 
     
     device_idx = device.index if device.type == 'cuda' and device.index is not None else 0
     
@@ -46,14 +47,8 @@ def evaluate_with_energy(
                 # Move images to device
                 images = images.to(device)
                 
-                # Timing inference
-                start_inf = time.time()
+                # Inference
                 outputs = model(images)
-                # Synchronization for accurate timing if using CUDA
-                if device.type == 'cuda':
-                    torch.cuda.synchronize()
-                inf_time = time.time() - start_inf
-                total_inference_time += inf_time
                 
                 for out, tgt in zip(outputs, targets):
                     pred_boxes = out["boxes"].cpu()
@@ -62,32 +57,41 @@ def evaluate_with_energy(
                     true_boxes = tgt["boxes"].cpu()
                     true_labels = tgt["labels"].cpu()
                     
-                    # Filter by confidence
+                    # Filter detections by confidence
                     keep = pred_scores > conf_thresh
                     pred_boxes = pred_boxes[keep]
                     pred_labels = pred_labels[keep]
                     pred_scores = pred_scores[keep]
                     
+                    # Classes present in ground truth for this image
+                    gt_classes_in_image = set(true_labels.tolist())
+                    # Classes detected by model for this image
+                    pred_classes_in_image = set(pred_labels.tolist())
+
+                    # Update True Negatives per class
+                    for cls_idx, _ in enumerate(class_names, 1):
+                        if cls_idx not in gt_classes_in_image:
+                            if cls_idx not in pred_classes_in_image:
+                                true_negatives_per_class[cls_idx] += 1
+
                     # Track support
                     for lbl in true_labels.tolist():
                         counters[int(lbl)]["support"] += 1
                         
-                    # Handle empty GT or Predictions for TN calculation
+                    # Handle empty GT or Predictions for matching
                     if true_boxes.numel() == 0:
-                        if pred_boxes.numel() == 0:
-                            true_negatives += 1
-                        else:
-                            # Every prediction on a background image is an FP
-                            for lbl in pred_labels.tolist():
-                                counters[int(lbl)]["fp"] += 1
+                        # If no GT, every detection is an FP
+                        for lbl in pred_labels.tolist():
+                            counters[int(lbl)]["fp"] += 1
                         continue
                         
                     if pred_boxes.numel() == 0:
+                        # If no detections, every GT is an FN
                         for lbl in true_labels.tolist():
                             counters[int(lbl)]["fn"] += 1
                         continue
                         
-                    # Matching
+                    # Matching (TP and remaining FP/FN)
                     iou_matrix = box_iou(pred_boxes, true_boxes)
                     matches = torch.nonzero(iou_matrix > iou_thresh, as_tuple=False)
                     matched_pred, matched_true = set(), set()
@@ -103,7 +107,7 @@ def evaluate_with_energy(
                             matched_pred.add(pi)
                             matched_true.add(ti)
                     
-                    # Unmatched predictions are FP
+                    # Unmatched detections are FP
                     for pi in range(len(pred_boxes)):
                         if pi not in matched_pred:
                             lbl = int(pred_labels[pi].item())
@@ -117,33 +121,32 @@ def evaluate_with_energy(
     
     energy_metrics = monitor.get_metrics()
     
-    # Calculate aggregate metrics
-    avg_latency_ms = (total_inference_time / total_images) * 1000
-    fps = total_images / total_inference_time if total_inference_time > 0 else 0
-    
     results = {}
     total_tp = 0
     total_fp = 0
+    total_tn = 0
     
-    for cls_idx, name in enumerate(class_names, 1): # class_names start from 1 because 0 is background
+    for cls_idx, name in enumerate(class_names, 1): 
         cnt = counters[cls_idx]
         tp, fp, fn, support = cnt["tp"], cnt["fp"], cnt["fn"], cnt["support"]
+        tn = true_negatives_per_class[cls_idx]
+        
         total_tp += tp
         total_fp += fp
+        total_tn += tn
         
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
         
         # FPR = FP / (FP + TN)
-        # Here we treat TN as the global TN count for simplicity, 
-        # as every background image is a TN for every class.
-        fpr = fp / (fp + true_negatives) if (fp + true_negatives) > 0 else 0.0
+        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
         
         results[name] = {
             "TP": tp,
             "FP": fp,
             "FN": fn,
+            "TN": tn,
             "Support": support,
             "Precision": precision,
             "Recall": recall,
@@ -154,17 +157,14 @@ def evaluate_with_energy(
     df = pd.DataFrame(results).T
     
     # Overall metrics
-    overall_fpr = total_fp / (total_fp + true_negatives) if (total_fp + true_negatives) > 0 else 0.0
+    overall_fpr = total_fp / (total_fp + total_tn) if (total_fp + total_tn) > 0 else 0.0
     
     print("\n" + "="*50)
     print("EVALUATION SUMMARY")
     print("="*50)
     print(f"Average GPU Power: {energy_metrics['avg_power_w']:.2f} W")
     print(f"Total GPU Energy: {energy_metrics['total_energy_j']:.2f} J")
-    print(f"FPS: {fps:.2f}")
-    print(f"Latency per frame: {avg_latency_ms:.2f} ms")
     print(f"Overall False Positive Rate: {overall_fpr:.4f}")
-    print(f"True Negatives (Images): {true_negatives}")
     print("="*50)
     
     return df, energy_metrics
